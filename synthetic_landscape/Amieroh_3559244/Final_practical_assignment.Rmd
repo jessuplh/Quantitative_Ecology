@@ -1,0 +1,630 @@
+---
+title: "Practical assignment"
+author: "Amieroh Abrahams"
+date: "19 August 2018"
+output: pdf_document
+mainfont: PT Serif
+monofont: PT Mono
+language: Australian
+sansfont: PT Sans
+fontsize: 12pt
+---
+
+# Assignment
+
+## Startup
+
+First I need to find, install and load various packages. These packages will be available on CRAN and can be accessed and installed in the usual way.
+
+```{r prelim_opts, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  comment = "R>",
+  warning = FALSE,
+  message = FALSE
+)
+
+library(tidyverse)
+library(ggpubr)
+library(vegan)
+library(gclus) # Needed for the coldist func
+library(cluster)
+source("Data/coldiss.R")
+source("Data/panelutils.R")
+source("Data/cleanplot.pca.R")
+source("Data/evplot.R")
+source("Data/PCA.newr.R")
+source("Data/CA.newr.R")
+```
+
+## Loading in the data
+
+Now to get to the data. The first step involves the loading of the three different datasets namely the environemntal, species and spatial datasets. 
+
+```{r load_files1, include=TRUE}
+spa <- read_csv("Data/spa.csv")
+spe <- read_csv("Data/spe.csv")
+env <- read_csv("Data/env.csv")
+spe_mass <- read_csv("Data/spe_mass.csv")
+```
+
+## Exploring the datasets
+Doing basic inspections on the datasets with visual plots prior to any analysis.
+
+```{r exploring_data, include=TRUE }
+# Environemntal dataset
+str(env)
+summary(env)
+head(env)
+tail(env)
+
+# Species dataset
+str(spe)
+summary(spe)
+head(spe)
+tail(spe)
+
+# Spatial dataset
+str(spa)
+head(spa)
+tail (spa)
+summary(spa)
+
+plot(env, gap = 0, panel = panel.smooth) # Rough plotting of the environmental dataset
+plot(spe, gap = 0, panel = panel.smooth)  # Rough plotting of the species dataset
+```
+
+Creating a visual representation of all the points sampled along the transect lines. First i mutate the dataset to create a column with the 28 site numbers sampled. 
+
+```{r site_map, include=TRUE}
+mutated_spa <- spa %>% 
+  mutate(ID = 1:28) # Adding another column to the dataset
+
+Site_location <- ggplot(mutated_spa, aes(x = as.factor(x), y = as.numeric(y))) +
+  geom_path(colour = "salmon") +
+  geom_text(aes(label = ID), colour = "blue4") +
+  labs(title = "Site Location", x = "x coordinate (cm)", y = "y coordinate (cm)") +
+  theme_bw()
+Site_location
+```
+
+Some more interestong things to do on the species data within the vegan package
+
+```{r species_accumulation_curve, include=TRUE}
+diversity(spe, index = "shannon") # diversity analysis quantifying diversity
+fisher.alpha(spe) 
+try1 <- specaccum(spe) # calculating species richness within an area
+plot(try1) # Plotting the species accumelation curve
+
+```
+
+## Question 1
+
+Here I make use of the dims function within R. This function identifies the number of dimensions of an array or vector. Here i specify the dimensions of the four (species, spatial, environmental and species mass) data sets. The dimensions given as rows x columns.
+
+```{r dimensions, include=TRUE}
+dim(env)
+dim(spa)
+dim(spe)
+dim(spe_mass) # Dimensions on the species mass dataset
+```
+
+# Question 2
+
+i.
+I now create a visualisation on the Cartesian (spatial) coordinates of the species richness, Shannon-Weaver index and the Simpson's Index. Here I make use of the diversity function allowing me to apply the different index's to the dataset. I also make use of the annotate function, this functon allows me to indicate the point of dispersal on the graphs created below.
+
+```{r combined_plot, include=TRUE}
+# Compute the number of species at each site
+# To sum by rows, the second argument of apply(), MARGIN, is set to 1
+# Sort the results in increasing order
+# sort_sit.pres <- sort(sit.pres$apply.spe...0..1..sum.)
+# sit.pres_df$spe_rich <- as.numeric(sit.pres_df$spe_rich)
+
+sit.pres <- apply(spe > 0, 1, sum)
+site_df <- data.frame(spa = sit.pres)
+sit.pres_df <- data.frame(spe_richness = sit.pres)
+
+spe_richness <- sit.pres_df %>% 
+  mutate(ID = 1:28)
+
+plot1 <- ggplot(spe_richness, aes(x = ID, y = spe_richness)) +
+  geom_step() +
+  geom_text(aes(label = ID), colour = "blue4") +
+  labs( x = "Positions of sites", y = "Species Richness", 
+        title = "Species Richness") +
+  theme_bw()
+plot1
+
+# species richness on spatial dataset
+spa_new <- as.numeric(mutated_spa$x) # converting to numeric
+spa_updated <- as.numeric(mutated_spa$y) # converting to numeric
+spa_new2_dataframe <- data.frame(Y = spa_updated) # formatting into a dataframe
+spa_new_dataframe <- data.frame(X = spa_new) # formatting into a dataframe
+new_plot <- cbind(spa_new_dataframe,spa_new2_dataframe) # Combining the dataset
+add <- new_plot %>% 
+  mutate(ID = 1:28)
+
+# Plotting species richness
+# Here the size of the circles is proportional to the species abuandance
+# The bgger the circle the higher the species abundance
+# By changing the code to 'show.legend = TRUE' instead of 'show.legend = FALSE', we will be able to see the legend provided which illistrate the values corresponding to the different circle sizes. 
+
+plot2 <-  ggplot(add, aes(x = as.factor(X), y = Y)) +
+  geom_line(colour = "salmon") +
+  geom_point(aes(cex = spe_richness$spe_richness), shape = 1, colour = "blue4", show.legend = FALSE) +
+  annotate("text", x = 1, y = 400, label = "1st point of dispersal", size = 2.5) +
+  annotate("text", x = 1, y = -30, label = "2nd point of dispersal", size = 2.5) +
+  labs(title = "Map of Species Richness", x = "x coordinate (cm)", y = "y coordinate (cm)") +
+  theme(legend.position="bottom")
+  theme_bw()
+plot2
+
+# Shannon-Weaver Plot
+# Here the size of the circles is proportional to the species diversity
+# The bgger the circle the higher the diversity
+# By changing the code to 'show.legend = TRUE' instead of 'show.legend = FALSE', we will be able to see the legend provided which illistrate the values corresponding to the different circle sizes. 
+
+Shannon <- as.tibble(diversity(spe, index = "shannon")) # using the diversity function to apply the shannon index
+plot3 <- ggplot(mutated_spa, aes(x = as.factor(x), y = as.numeric(y))) +
+  geom_path(colour = "salmon") +
+  geom_point(aes(cex = Shannon$value), shape = 1, colour = "blue4", show.legend = FALSE) +
+    annotate("text", x = 1, y = 400, label = "1st point of dispersal", size = 2.5) +
+  annotate("text", x = 1, y = -30, label = "2nd point of dispersal", size = 2.5) +
+  labs(title = "Shannon-Weaver Diversity Index ", x = "x coordinate (cm)", y = "y coordinate (cm)")  +
+  theme(legend.position="bottom")
+  theme_bw()
+plot3
+
+# Simpson's Index Plot
+  # Here the size of the circles is proportional to the species diversity
+# The bgger the circle the higher the diversity
+# By changing the code to 'show.legend = TRUE' instead of 'show.legend = FALSE', we will be able to see the legend provided which illistrate the values corresponding to the different circle sizes. 
+
+  simpsons <- as.tibble(diversity(spe, index = "simpson")) # Using the diversity function to apply the simpsons index
+plot4 <- ggplot(mutated_spa, aes(x = as.factor(x), y = as.numeric(y))) +
+  geom_path(colour = "salmon") +
+  geom_point(aes(cex = simpsons$value), shape = 1, colour = "blue4", show.legend = FALSE) +
+    annotate("text", x = 1, y = 400, label = "1st point of dispersal", size = 2.5) +   
+  annotate("text", x = 1, y = -30, label = "2nd point of dispersal", size = 2.5) +
+  labs(title = "Simpson Index ", x = "x coordinate (cm)", y = "y coordinate (cm)") +
+  # guides(fill=guide_legend(title= "Species abundance")) +
+  theme(legend.position="bottom")
+  theme_bw()
+plot4
+
+combined_plot <- ggarrange(plot1, plot2, plot3, plot4)
+combined_plot
+```
+ii.
+
+
+Plot1 Representing species richness and plot 2 representing a map of species richness, focuses on the abundance of each species. The number of different species varied within each quadrat due to the random dispersal of species from two different points in the study area and with wind influencing the dispersal of species. Species richness is high between 100cm and 300cm latitude (y). Sites 17 and 18 were unique in that it comprised of wood and a cardboard box with an incline and have an average species richness. Site 5, also being the site of dispersal, had the greatest number of species present. Site 27 and 28 appeared to have no species present. These sites were the furthest from the point of dispersal even with wind acting as a vector, species were unable to disperse at such a great distance. Further into the practical, the position of dispersal changed and the wind vector resulted in a variation in species distribution. Both sites 27 and 28 have the lowest species richness as species were dispersed towards the centre of the study site from their points of dispersal, making it difficult for species to end up at these sites (being in the outskirts of the study area) as well as at other sites bordering the study site. S
+
+Plot 3 representing the Shannon weaver index focused on species diversity. - The Shannon index emphasises evenness. The species diversity appeared to be much higher in the middle quadrat of each of the transects. There was a high species diversity at the 1st point of dispersal in contrast to the low species diversity found at the 2nd point of dispersal. The much heavier species (gums and beans) were dispersed at this point and the wind applied did not influence dispersal, however, at the 2nd site of dispersal wind influenced the distribution of the species already colonised after the 1st dispersal. The evidence of high evenness in the central egion of the study site may be attributed to species dispersing from there point of release to the centre of the study. Sites further away from the dispersal point (sites 22,23,27 and 29) express a lower species richness and diversity and as a result a low evenness.
+
+Plot4 (Simpsons Index): The Simpson's index incorporates species richness and the abundance of relative species. The diversity of species closely correlates to the species richness as seen in the combined plot. The diversity of species is greatest in the central region of the study site, the areas possessing the greatest species richness. The species diversity is low at sites 1 and 2, site 1 being the dispersal point of the gums and jelly species, whereas there is a higher species diversity at sites 6 and 7, site 7 being the release of the paper species. As the gummy and jelly species possess a greater mass, they dispersed further away from their point of release than the paper species, irrespective of the wind. The wind also played a role in further dispersing the colonized paper species through the release of the gummy and jelly species. As species richness and evenness increases, so does the diversity.
+
+## Question 3
+
+i.
+Below I calculate an association matrix for the species data by first transposing the data. Here I make use of the vegdist function. This function computes dissimilarity indices that are useful for or popular with community ecologists. 
+
+```{r association matrix, include=TRUE}
+#i.
+spe.t <- t(spe) # Transposing the datset
+spe.t
+spe.t.S7 <- vegdist(spe.t) #Computing dissimilarity indeces on the transpose data
+round(as.matrix(spe.t.S7), 2) # rounding off the value to two decimal places
+
+# OR
+cor(spe) # func already standardises the dataset
+```
+
+ii.
+Using the coldiss function within R im now able to visualise the association matrix on the species data calculated above. The magenta is the dissimilarity close to 0 = max dissimilarity. Cyan is the dissimilarity close to 1 = min similarity
+
+```{r visual_association_matrix, include=TRUE}
+#ii.
+coldiss(spe.t.S7, byrank=FALSE, diag=TRUE)
+```
+
+iii.
+The crumbled species are highly correlated with each other. These species express different dimensions when compared to the flattened species and as a result are not as largly influenced by the wind vector. Flattened species however are some what associated and are largely influenced by the wind vector. The gum species were poorly associated with any of the other species due to its poor dispersal ability as a result of its heavy weight. Squares and triangles and crumbled squares and crumbled triangles were strongly correlated with each other. Small triangles also correlated with big triangles whilst big half circles correlated with the pink elephant. The dispersal ability was wind controlled therefore, heavier species like the gums were poorly correlated whereas lighter species such as the squares, triangle and rectangle were easily dispersed allowing them to correlate strongly with one another. At the second point of dispersal, flat species may have also been more easlily displaced due to its dimensions that are easily susceptible and swept up by the wind. 
+
+Small and big triangles have a dissimilarity of 47% whereas a small and big rectangle have a dissimilarity of 82%. Both crumbled and non crumbled species of the same shape have greater dissimilarities. A small crumbled triangle and a small triangle have a dissimilarity of 87 % and a small crumbled half circle and a small half circle have a dissimilarity of 100%. The crumbled shapes are greatly dissimilar to the gums and have dissimilarities of 1, for example a small crumbled triangle and the gums have a dissimilarity of 1 and a big crumbled square and the gums have a dissimilarity of 1 (minimum similarity). 
+
+## Question 4
+
+i.
+Here i perform a PCA analysis on the species data
+
+```{r PCA_analysis, include=TRUE}
+# i 
+spe.pca <- rda(spe, scale=TRUE) # scale = TRUE , mean = 0 , sd = 1
+# PCA(rda) - is applied to correlation matrix: Converts it to euclidean space. Low euclidean distance (short plot)
+spe.pca 
+summary(spe.pca) # Default scaling 2
+# summary(spep.pca, scaling=1)
+
+(spe <- spe.pca$CA$eig) # Eigenvalues
+```
+
+PCA is one of the many ways to analyse the structure of a given correlation matrix. By construction, the first principal axis is the one which maximizes the variance (reflected by its eigenvalue) when data are projected onto a line and the second one is orthogonal to it, and still maximizes the remaining variance. Inertia refers to the sum of the diagonals (1+1+1+1) of the correlation matrix. This is the reason why using the first two axes should yield the better approximation of the original variables space. Cumulative proportion is calculated by adding the proportion explained by the PC axes. The sum of all the PC axes should be equal to 1 (i.e. all PC axes should explain 100% of the variance). From the summary, we can undersand PC1 explains 22% of variance and PC2 explains 14% and so on. Cumulative proportion is calculated by adding the proportion explained by the PC axes. Usually Principal components which explains about 95% variance can be considered for models. Summary also yields cumulative proportion of the principal components. PCA is eigenvector based. Eigenvalue decomposition reduces complex data to the new variable that captures variability. The eigenvalues tell you how much of the original variance is captured in the direction of the corresponding eigenvector. That tells you how important each eigenvector is. The eigenvalues tell you how much of the original variance is captured in the direction of the corresponding eigenvector. Larger eigenvalue means more important, PC1 largest eigenvalue of 3.791. Thus the first axis has the most explanitory power. Furthur looking at the eigenvalues, the first few values are clearly larger than the following ones. The proportion of variance explained by the first r principal components provides the most variance for any r components. The percentage of variance explained by the first r principal components is just the total variance in the first r principal components divided by the total variance in all n principal components, PC1 proportion explained value is 0.223. PC1 represents the relationship between the new value and the old value. The bigger the values the more important the variance. The high value makes us confident that our interpertation of the first pair of axes extracts the most relevant infomation from the data. The total inertia is the sum of the diagonal of the correlation matrix that feeds into the PCA the sum of the eigenvalues. Only 22% varience is explained by PC1: PC1 is calculated by taking the eigenvalue/total inertia*100. Cummelative propoportion: from PC1-PC6 only explains 75.96% varience. The eigenvalues indicate the importance of the PC axes, with the first PC axis always having the highest eigenvalue, diminishing until the smallest one is found for the last PC axis; the sum of all the eigenvalues equals the total inertia. Eigenvectors: The eigenvectors represent the 'loadings' of the original, untransformed species variables on the corresponding eigenvalue (PC axis); they indicate the importance of the original variable along the new reduced dimension captured by the PC axes. Site scores: The coordinates of the sites (rows) on the ordination (Euclidian) space, i.e. the ordination diagram. Species scores: coordinate the arrow heads of variables. The species scores refer to the position of the arrow heads on the PCA biplot; they indicate the direction and relative magnitude of species associated with as a linear gradient across the 'landscape', i.e. the reduced space represented by the corresponding PC axes. Site scores: The coordinates of the sites (rows) on the ordination (Euclidian) space, i.e. the ordination diagram. Site scores: Coordinates of the sites in the ordination diagram.
+
+The code below proves the discription above and illistrates how many axes must be retained, and why..
+
+```{r Proportion_explained, include=TRUE}
+(p1 <- spe.pca$CA$eig[1] / sum(spe.pca$CA$eig)) # For the first PC axis, the proportion of variation explained is given by
+
+(p2 <- spe.pca$CA$eig[2] / sum(spe.pca$CA$eig))
+(p3 <- spe.pca$CA$eig[3] / sum(spe.pca$CA$eig))
+(p4 <- spe.pca$CA$eig[4] / sum(spe.pca$CA$eig))
+(p5 <- spe.pca$CA$eig[5] / sum(spe.pca$CA$eig))
+(p6 <- spe.pca$CA$eig[6] / sum(spe.pca$CA$eig))
+
+((p1 + p2 + p3 + p4 + p5 + p6) * 100) # The cumulative inertia (%) of the first six axes is
+
+# 6 of the axes must be retained because the fix six add up to 75% or the first 7 axes because their means are above the average of all of the axes.
+```
+
+The eigenvalues sum up to equal the total interia (i.e., total variance in this case). This is evident in the summarry above
+```{r total inertia, include=TRUE}
+sum(spe.pca$CA$eig)
+```
+
+The code below lets us plot the PCA calculated above.
+
+```{r PCA_plots, include=TRUE}
+# ii
+par(mfrow = c(2, 2))
+biplot(spe.pca, scaling = 1, main = "PCA - scaling 1 (sites)")
+biplot(spe.pca, main = "PCA - scaling 2 ('species')") # default scaling 2
+cleanplot.pca(spe.pca, scaling = 1, mar.percent = 0.08) # sites scaling
+cleanplot.pca(spe.pca, scaling = 2, mar.percent = 0.04)
+```
+ii.
+
+6 of the axes must be retained because the fix six add up to 75% or the first 7 axes because their means are above the average of all of the axes. The figure on the left makes use of sites scaling (scaling 1) so the sites are scaled by eigenvalues. Here the distances in multidimensional space are more accurately reflected on the graph plane so it shows the relationships between sites better. Sites that share similar environmental characteristics plots closer together and the ones that are further apart on the graph are also more dissimilar in their actual multidimensional space. The circle of equilibrium on the bottom left panel shows that species (gums, big half circles and pink elephant) certainly influence the spread of sites (maybe you can say are most abundant at those sites, they are significant especially where the lines extend past the circle). The presence of species are generally associated with the spread of sites towards the left of the vertical zero line, although their influence is felt rather obliquely (not perfectly aligned with the direction of spread in sites); this might indicate the another important variable is lacking that can account for this direction of spread, but certainly the presence of certain species can be used to explain some of the spread of sites in this direction. As many axes maintained as there are principal components (dimensions). Sites follow random pattern with species being present at certain sites only, many sites have no species present, many species have significant abundances at sites where arrows extend further than the circle in the cleanplot.
+
+The scaling 1biplot: Scaling one shows the grouping of the sites. Sites that share similar species are plotted more closely together. Sites on the left of the plot are clumped together, however, sites 4, 5, 11, 12,18 and 19 are more different because they plot further away from the group. (Sites 11, 19, 5 and 18 are the more outliers). The distances between object points approximate the Euclidean distances between objects. Thus, objects ordinated closer together can be expected to have similar variable values. Right-angled projections of an object point on a variable's vector approximates the value of that variable for the chosen object. The length of a variable vector in the ordination plot reflects its contribution to the ordination. The scaling 1 biplot shows a gradient from left to right, starting with a group formed by sites 6, 14, 17, 24, 25 which display the highest values of small half rectangle and gums, as you move to the other sites the number of these species decreases, and the lowest values for all of the other shapes. All the sites in the top left quadrant appear to have the lowest values for all of the different species and are not associated with either of the species. A third group of very similar sites (11, 12 and 19) show high values for a range of different species regardless of the size and type of species present, these sites however appear to have the lowest values for the gummy species present. The big crumbled half circle and small crumbled half circle, as well as the big square show their maximum values around sites 4 and 5; the values decrease afterwards. There are also a range of other shapes within this region that are correlated to both of these sites.  
+
+Scaling 2bioplot: The angles between all vectors approximate their (linear) covariance/correlation. Species that plot with smaller angles btween them are more strngly correlated with each other. The scaling 2 biplot shows that the variables are organized in groups with no variables laying within the top left quadrant of the plot (no species present at those sites). With smaller the angle between the arrows the more closely associated or correlated each species are to one another. For example big c rectangles and beans are closely correlated to eachother and big crumbled squares and big crumbled squares are closely correlated. The lower left part of the biplot shows that small half circles and gums are very highly, positively correlated, and that these two variables are very highly, negatively correlated with another group comprising of all the variables on the top right side of the plot. The top right portion of the plot shows all the variables (Species) that are highly correlated with each other. Variables (species) on the top right portion of the plot is highly correlated with variables (species) on the bottom right of the plot. Many of the species distribution on the right portion of the plot can also be looked as orthogonal arrows, indicating a correlation close to 0. An example of this is evident when looking at big half circles and big crumbled squares/ big crumbled half circles, similarly this could be applied to many of the other species. Small half circles, big square and small triangle, displays a shorter arrow, showing its lesser importance for the ordination of the sites in the ordination plane. This example shows how useful a biplot representation can be in summarizing the main features of a data set (clusters of different species at sites are obvious). Right-angled projections of an object point on a variable's vector approximates the value of that variable for the chosen object. Distances between object points may be non-Euclidean and should not be interpreted with great confidence.
+
+No species appear to be negatively correlated with another as most species are plotted close to each other and no plots plotting directly opposite another. Most of the sites and species are randomly distributed (with no clear gradient) with only a few outliers that are associated with the species rich areas. Approximatly half of the species fall outside of the radius of the circle and may be interpreted as the species that play more of a role in determining the spread of sites.
+
+
+## Question 5
+
+i.
+Below is the code needed to for undertaking an NMDS analysis onthe species data. Here we make use of the metaMDS function within the vegan package. Before running this analysis we are required to remove all the rows that contain only zero values. 
+
+```{r, removing_unwanted_rows, include=TRUE}
+spe <- read_csv("Data/spe.csv") # at times the species data need to be reloaded- dataset format changed above so reload
+spe.1 <- spe[-16,]
+remove_spe <- spe.1[-26:-27,]
+spe.d <- vegdist(remove_spe, method = "bray", binary = TRUE)
+
+```
+
+```{r NMDS_plot, include=TRUE}
+# If it doesnt load properly reload the species dataset
+# Removing the rows with no data for this analysis
+
+# spe_metaMDS <- metaMDS(spe.d)
+# spe_metaMDS
+# 
+# dev.new(title="NMDS on species - Percentage difference")
+# plot(spe_metaMDS, type = "t", main = paste("NMDS/Percentage difference", round(spe_metaMDS$stress, 3)))
+# 
+# par(mfrow = c(2, 2))
+# stressplot(spe_metaMDS, spe.d)
+# ordiplot(spe_metaMDS, type = "t", display = c("sites"),
+#          main = "NMDS with site scores")
+# abline(v = 0, h = 0, lty = 3)
+# 
+# dev.new(title="NMDS - Shepard plot", width=12, height=6)
+# par(mfrow=c(1,2))
+# stressplot(spe_metaMDS, main="Shepard plot")
+# gof <- goodness(spe_metaMDS)
+# plot(spe_metaMDS, type="t", main="Goodness of fit")
+# points(spe_metaMDS, display="sites", cex=gof*300)
+```
+
+ii.
+Final NMDS. The function stressplot draws a Shepard plot where ordination distances are plotted against community dissimilarities, and the fit is shown as a monotone step line. In addition, stressplot shows two correlation like statistics of goodness of fit. The correlation based on stress is R^2^ = 1−S^2^. all of the sites are poorly fitted except maybe 10 which is the smallest circle.
+
+```{r NMDS_BOOKplot, include=TRUE}
+###################### According to the book.........
+
+spe.nmds <- metaMDS(remove_spe, distance="bray") 
+spe.nmds
+spe.nmds$stress # stress value = 0.1351661
+dev.new(title="NMDS on the different species - Percentage difference")
+plot(spe.nmds, type="t", main=paste("NMDS/Percentage difference - Stress =", round(spe.nmds$stress,3)))
+
+# Shepard plot and goodness of fit
+dev.new(title="NMDS - Shepard plot", width=12, height=6)
+par(mfrow=c(1,2))
+stressplot(spe.nmds, main="Shepard plot")
+gof <- goodness(spe.nmds)
+plot(spe.nmds, type="t", main="Goodness of fit")
+points(spe.nmds, display="sites", cex=gof*300)
+```
+
+Calculating the stress value of the NMDS
+
+```{r NMDS, include=True}
+spe.nmds$stress # stress value = 0.1351661
+```
+
+Stress values equal to or below 0.1 are considered fair, while values equal to or below 0.05 indicate good fit. Our stress value is 0.1351661
+
+A Shepard stress plot showing the relationship between the actual dissimilarities between objects (from the original dissimilarity matrix) and the ordination distances. I compared variation in the species abundance composition using a dissimilarity matrix among modules. On the x-axis we see a large amount of scatter (between 0.2-0.9). This implies a poor linear relationship and the ordination is not representative of the original distances. Dissimilarities were calculated by applying the Bray-Curtis index to the number of individual per site. Looking at the dataset the NMDS analysis is the best analysis used rather than its alternative ordination such as PCoA, because NMDS is less sensitive to effects generated by heterogeniety in species distribution. NMDS is recognized as the most efficient method to recover orignal multivariate ecological distances. The NMDS axis captured a 60% of the variation on species composition among plots (Stress = 0.1354581). Shepard diagram shows that the observed dissimilarities and the ordination distances were up to 98% correlated (P,0.0001,Figure to the left). The shepard stress plot shows the relationship between the actual dissimilarities between species (from the original dissimilarity matrix) and the ordination distances (i.e. the distances on the final plot). Species that are ordinated closer to one another are likely to be more similar than those further apart. In the diagram there is a large amount of scatter indicating a poor linear relationship. Therefore, the ordination is not representative of the original distances. The shepards plot yeild two values; the Non-etric fir R^2^ = 0.9 and the Linear fit R^2^ = 0.7.
+ 
+The plot representing the Goodness of fit indicates that sites with larger bubbles are poorly fitted sites. Many crumbled species occur close to sites 5 and 12 with few occuring at sites 3 and 7. Site 5 and 12 occur within the central region of the study area. The crumbled species may be distributed in this manner as a result of the wind vector which was was applied at both site 1 and site 7. No species occur around site 8,25,14,19,13,21 and 22. These sites are located further away from the point of species distribution implying that species were unable to travel to these locations (wind might have also influence the dispersal distance). The bean species are not associating or mixing wth any of the other species and occurs close to site 10, wind was not a factor unfluencing species dispersal due to its heavy mass and as a result these species distributed close to the point of dispersal. Site 8,10 and 12 display smaller bubbles compared to each of the other sites and thus are the more positivley fitted sites, however no species are present around site 8, only bean species along site 10 and only crumbled species at site 12. 
+
+## Question 6
+
+i.
+Now I apply a constrained analysis to the data. Here I make use of the decostand function.The function provides some popular (and effective) standardization methods for community ecologists. First I make use of the Hellinger-transformation to transform the species dataset. I then apply the rda function at the default setting (Scaling 2).
+
+```{r RDA_analysis, include=TRUE}
+
+spe <- read_csv("Data/spe.csv")
+
+#i
+spe.hel <- decostand(spe, "hellinger") # Standardise the data
+(spe.rda <- rda(spe.hel ~ ., env))
+summary(spe.rda)	# Scaling 2 (default)
+sum(spe.rda$CCA$eig) # To calculate sum of inertia of CCA and eigenvalues 
+```
+The variance is partitioned into constrained and unconstrained proportions. Where 7.27% of the variance is explained by constrained analysis and 92.73% of the vaiation is explained by unconstrained analysis.The canonical (RDAx) eigenvalues measures amounts of variance explained by the RDA model, where RDA1 and RDA2 cumulatively explains 7.23% of the variance in the RDA model. Proportions of the total explained variance, where RDA1 explains 20.20% and RDA2 explains 79.80% of the variance. Species scores are the coordinates of the tips of the vectors representing the response variables in the bi- or triplots. Influencing species in RDA1 include s_rect, b_half_circles, pink_elephants, beans and gums.
+
+Redundancy analysis (RDA) is a method which extracts and summarise the variation in a set of response variables that can be explained by a set of explanatory variables. RDA is a direct gradient analysis technique which summarises linear relationships between components of response variables that are "redundant" with a set of explanatory variables. The overall variance is partitioned into constrained and unconstrained fractions. The constrained fraction (0.051) is the amount of variance of the Y matrix. The unconstrained fraction yielded a value of 0.6551. This analysis yielded 2 canonical axes (with eigenvalues labelled RDA1 to RDA2) and 16 additional,unconstrained axes for the residuals (with eigenvalues labelled PC1 to PC16). The output above provides us with some useful information. Inertia is another name for variation or variance in this case. “Total” refers to total variance, “Constrained” refers to the amount of variance explained by the explanatory variables, “Unconstrained” refers to the residual variance. Constrained + Unconstrained = Total. 
+
+```{r total, include=TRUE}
+0.05134 + 0.65514 # This is the constrained + unconstrained = total (As explained above)
+```
+
+An R^2^ statistic can be derived simply as Constrained / Total.
+
+```{r R^2^ statistic, include=TRUE}
+0.70648/0.05134 #testing the above statement (as explained above)
+```
+
+The function RsquareAdj computes R2 and R2-adjusted. The variable “Rank” indicates the number of variables included. The eigenvalues are displayed for both the constrained and unconstrained axes. In this context these eigenvalues indicate how much variance each of the axes contribute to.
+
+```{r RsquareAdj, include=TRUE}
+RsquareAdj(spe.rda) # coode for the statement above (as explained above)
+```
+
+The total variance of the dataset is partitioned into both constrained and unconstrained analysis. If the constrained variance is much higher than your unconstrained variance, the analysis suggests that much of the variation in the response data may be accounted for by your explanatory variables. Here our constrained variance is lower than the unconstrained variance. The amount of variance of the y matrix explained by the explanitory variables are 0.05134. This analysis yield 2 canonical axes, with the eigenvalues labelled RDA1 and RDA2 and 16 additional, unconstrained axes for the residuals with eigenvalues labelled PC1 to PC16. Each RDA axis has an eigenvalue associated with it. In this case RDA1 has an eigenvalue of 0.04097 and RDA2 has a eignvalue of 0.01037. The total variance of the solution is equivalent to the sum of the eigenvalues, this is for both constrained an unconstrained. 
+
+```{r include=TRUE}
+0.04097+0.01037 #This yields the same value as the constrained inertia present within the summary. The proportion of variance explained by each axis is simply the quotient of a given eigenvalue with the total variance of the solution.
+```
+
+The last cumulative value is therefore 1. The cumulative contribution to the variance obtained by the 2 canonical axes is the proportion of the total variance of the response data explained by the RDA. It is the same value as the “Proportion constrained” presented above.
+The canonical eigenvalues RDA1 to RDA2 increase in value. The first residual eigenvalue (PC1), on the contrary, is larger than the last canonical eigenvalue and is  larger than most RDA eigenvalues. This means that the first residual structure (axis) of the data has more variance than some of the structures that can be explained by the explanatory variables in X.
+
+The constrained axes represent the amount of variance in the species data. The unconstrained axes represents the amount of variance that still remains after the consrained axes have been retained. This represents variance that cannot be explained by the environmental variables. 
+RDA1 explains 79.8% of the constrained variances and as a result has the most explanatory power of the two axes. RDA2 explains 20.9% of the constrained variance. In total, RDA1 and RDA2 cumulatively explain 100% of the constrained varaince and this which ultimatly explains 7.3% of the total variance. 
+The results give the eigenvalues themselves, as well as the cumulative proportion of variance explained (for the RDA axes) or represented (for the residual axes). The last cumulative value is therefore 1. The cumulative contribution to the variance is the proportion of the total variance of the response data explained by the RDA. It is the same value as the “Proportion constrained” presented above; it is 0.07267. The canonical eigenvalues RDA1 to RDA2 are (of course) decreasing in value; the first residual eigenvalue (PC1), on the contrary, is larger than the last canonical eigenvalue. This means that the first residual structure (axis) of the data has more variance than some of the structures that can be explained by the explanatory variables in X. Cumulated constrained eigenvalues: these are cumulative amounts of variance expressed as proportions of the total explained variance. The set of "scores" are also a feature of the RDA analysis and vary based on the scaling factor used in the analysis. Site and species scores are the coordinates used to ordinate points and vectors.
+
+
+ii.
+I now run the permutation tests. A significant value for the overall RDA solution and individual RDA axes may be determined by permutation. The significant values should similar to those of an ANOVA test
+
+```{r permutation, include=TRUE}
+# ii
+# Global test of the RDA result
+anova(spe.rda, permutations=how(nperm=999)) # p =0.6
+# Not significant as p>0.05
+# Tests of all canonical axes
+anova(spe.rda, by="axis", permutations=how(nperm=999)) # p>0.05
+# Axes are not significant
+anova(spe.rda, by="term", permutations=how(nperm=999)) # p value for each location
+# Variance inflation factors (VIF)
+vif.cca(spe.rda)
+
+# Apply Kaiser-Guttman criterion to residual axes
+spe.rda$CA$eig[spe.rda$CA$eig > mean(spe.rda$CA$eig)]
+
+```
+The first test examines overall model fit relative to a randomized or permuted matrix of data. The second test examines the partial effects of the individual variables included in the model. An overall test of significance showed that canonical between matrices X and Y are highly insignificant (p>0.05) after 999 permutations as a result we can conclude that environmental variables have no significant effect on the distribution of species. The canonical axes explain 40% and 10% of the response table varience respectivley. The canonical axes (RDA1 and RDA2) are all insignificant (p>0.05) and display weak species environment correlation and as a result we can conclude that The two axes do not significantly explain the variance observed. The permutation done on the entire RDA model, axes, and environmental variables do not significantly explain the variance observed, environmental variables do not affect species distributions.  
+
+
+iii.
+Now I create all the nessasary plots for the codes written above. First i create the triplots of the rda results (wa scores). The site sores are as weighted average and this is as per the vegan package default.
+
+```{r RDA_plots, include=TRUE}
+# iii
+coef(spe.rda) # here we obtain the cranonical coefficients
+
+# Scaling 1: distance triplot
+dev.new(title="RDA scaling 1 + wa") 
+par(mfrow = c(2, 2))
+plot(spe.rda, scaling=1, 
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - wa scores")  # wa-weight averages
+spe.sc1 <- scores(spe.rda, choices=1:2, scaling=1, display="sp") #sp -species
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length=0, lty=1, col="red")
+
+# Scaling 2 (default): correlation triplot
+# dev.new(title="RDA scaling 2 + wa")
+plot(spe.rda, main="Triplot RDA spe.hel ~ env2 - scaling 2 - wa scores")
+# Explanitory variables as arrows
+# Arrows for species are missing
+spe.sc2 <- scores(spe.rda, choices=1:2, display="sp") # The scores function the argment choice indicates which axes needs to be selected
+arrows(0, 0, spe.sc2[, 1]*0.92, spe.sc2[, 2]*0.92, length=0, lty=1, col="red")
+
+## Triplots of the rda results (lc scores)
+## Site scores as linear combinations of the environmental variables
+# Scaling 1
+# dev.new(title="RDA scaling 1 + lc")
+plot(spe.rda, scaling=1, display=c("sp", "lc", "cn"),  #cn - explanitory variables
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - lc scores") # lc - linear combinations of explanitory variables
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length=0, lty=1, col="red")
+
+# Scaling 2
+# dev.new(title="RDA scaling 2 + lc")
+plot(spe.rda, display=c("sp", "lc", "cn"), 
+     main="Triplot RDA spe.hel ~ env2 - scaling 2 - lc scores") 
+arrows(0, 0, spe.sc2[,1]*0.92, spe.sc2[,2]*0.92, length=0, lty=1, col="red")
+```
+
+The environmental variables are now displayed and their placement indicates their loading on the two displayed RDA axes. Cardboard is loading heavily on RDA1 indicating that this variable explains a larger portion of the variance associated with axis 1. Carpet is loading heavily on RDA2 indicating that this variable explains a larger portion of the variance associated with axis 1. The location of the species relative to the environmental variables indicates how strongly a species is associated with a particular environmental variable. 
+
+Eigenvalues of the first 3 axes are 0.04, 0.01 and 0.15. From Scaling 1 we see that cardboard is mostly associated with gums, s_half_circles, pink_elephants and b_half_circles. Whereas carpet is closely associated with  the remainder of the species except b_square and s_rect. 
+
+The angle between the carpet and the cardboard is greater than 90 degrees so they are uncorrelated. Only the environmental variables that significantly explained variability in the community structure after fitted to the ordinations (arrows). In our biplot only two of the three environmetal variables are present. This indicates that wood (which is the excluded variables) does not significantly influence or explain the variability within the community. Our points represent the different species present at a specific location (n = 28). The length of the arrow is proportional to the rate of change. The figure above (Triplot1, Scaling 1) indicates that the rate of change of envirnomebvxcntal factor (carpet) is greater than the rate of change of the enviornemntal variable (cardboard). Triplot scaling 1: Objects located close together are expect to have similar variable values. Looking at this plot it is evident that more species are correlated with the carpet (environmental variable) and fewer species are correlated with the cardboard (environmetal variable)
+Triplot scaling 2: The angle between carpet and cardboard is approaching 110º suggesting a strong negative correlation between the two variables.
+
+wa scored refers to the weighted sums of species. lc scores refers to the fitted site scores. wa scores (scaling 1): distance biplot: The angles between response and explanatory variables in the biplot reflect their correlations wa scores (scaling 2): correlation biplot: The angles in the biplot between response and explanatory variables, and between response variables themselves or explanatory variables themselves, reflect their correlations. These two axes cumulatively explain only 7.3% of the total variance, we are not confident that the major trends have been well-modelled in this analysis. The adjusted R2 value is extremely low (-0.001512655). In scaling 1 right angles drawn from the carpet vector show that majority of species are associated or influenced by the carpet. These species should occur where there are large amounts of the variabe (i.e. carpet).  Pink elephants, small half circle big half circles and gums can be expected to be influenced by cardboard. scaling 2: Additionally, row 17 and 18 are far displaced from the grouping or clustering of the rest fo the rows.
+
+Scaling 1- distance plot: The angle between response and explanitory variables in the biplot reflect their correlations. Distance between certroids approximate their Euclidean distances. Scaling 2 - correlation biplot: Distance among and between centroids do not depict their Euclidean distances. The angles in the biplot between response and explanitory variables, and between the response variables themselves or explanitory variables themselves, reflect their correlation. Keeping these points in mind i am now able to interpret the pair of plots represebtubg the fitted site scores (the two bottom plots). 
+
+Species that share similar environmental characteristics and locations plots closer together and the ones that are further apart on the graph are also more dissimilar in their actual multidimensional space. 
+
+## Question 7
+
+Landscape ecology refers to the study of the relationships found among the ecological processess in the environment and ecosystems. Ecology underpins the study of living organims (plants and animals)in the community. The landscape that was sampled was flat and spacious to sustain a wide range of species.  The carpet covered the entire landscape, whereas the wood and cardboard were only found at specific sites of the landscape. The carpet was an ideal area in which to do sampling as there were no other species present on landscape besides the species under study. The only steep area was the wood and carboard, which was arranged in the form of a mountain. This mountain-like object influences the distribution of the different species as it acted as a barrier by seperating species from eachother and isolating some species from the other. Few species were present on the  incline and peak of the mountainous region and no species were present on the stainless steel bowl. Beneath the object created a microhabitat for some species. Within the study area, species were randomly distributed amoung sites and between carpet, wood and cardboard environments with most species were being present on carpet. Species were dispersed by wind onto the land. Other barriers such as a stainless steel bowl prevented species from inhabiting that area. It is evident that certain species were able to disperse further than others and this dispersal rate was influenced by the strength of the wind, the mass of the species other man made barriers. Lighter Species were able to disperse further than heavier species. In addition the direction in which the wind blew also influenced were species landed. Species abundances on wood and cardboard environments were low, indicating that these environments may be unfavourable. The distribution of species across the landscape was infuenced by their points of dispersal, the force at which the species were dispersed the wind acting  on species dispersal, the weight of the species in addition to the suitability of each environment. As seen in this investigation, most species were present at sites situated in the centre of the landscape, this can be explained by the fact that species were dispersed from their respective points of dispersal (two points of dispersal bordering the landscape) towards the centre of the landscape. The mass of the gummy and jelly species present in this landsacpe was greater than that of the paper species and, therefore, the gummy and jelly species were dispersed futher away from their point of release towards the centre of the study area than the paper species. Fewer species were present on the mountain-like structure, indicating that this environment may be difficult to colonise and that only species possessing favourable traits are able to exist in this region.
+ As explained above, many environmental variables are responsible for the distribution of species across this landscape.
+
+Here i attempt to run a spatial analysis on the dataset.
+
+```{r prelim_opts2, echo=FALSE}
+# LOading the required packages needed 
+library(tidyverse)
+library(ape)
+library(spdep)
+library(ade4)
+library(adegraphics)
+library(adespatial)
+library(vegan) # Loading vegan here to avoid complications when running the analysis
+
+# loading the required functions
+# These functions are present in the numerical ecology stuff
+source("Data/plot.links.R")
+source("Data/sr.value.R")
+source("Data/quickMEM.R")
+```
+
+Note: Reload the required datasets (spe, env, spa) as these datasets might have been changed to fit the previous analysis done.
+
+```{r load_files2, include=TRUE}
+spa <- read_csv("Data/spa.csv")
+spe <- read_csv("Data/spe.csv")
+env <- read_csv("Data/env.csv")
+spe_mass <- read_csv("Data/spe_mass.csv")
+```
+
+Here I transform the dataset and attempt to plot out a spatial correlogram. Code does not run fully. Then I created the mantle orrelogram in the code below this code.
+
+```{r spatial_correlogram, include=TRUE}
+# Load the required files
+
+# Transform the data
+spe_trans <- decostand (spe, "hellinger")
+spa.xy.c <- scale(spa, center=TRUE, scale=FALSE)
+
+# Spatial correlogram (based on Moran's I)
+# ****************************************
+# Search for neighbours of all points within a radius of 90 
+# and multiples. The points do not 
+# form a connected graph at 90.
+dev.new(title="Linkage map")
+plot.links(spa, thresh=90)
+nb1 <- dnearneigh(as.matrix(spa), 0, 360)
+summary(nb1)
+```
+
+Now I create a Mantel correlogram of the practical data by using the function mantel.correlog. This function is found in the vegan package. Here i make use of both the species and spatial datasets. The first step is to transform and then detrend the species dataset. I chose to look into this as throughout the practical it was clear that spatial structures play a very important role in the analysis of ecological data. In actual real life situations living communities are spatially structured at many scales, and these structures are the result of several classess of processess. During this experiment wind was the only external force present. Spatial correlation in the multivariate domain can be assessed and tested for by means of Mantel correlogram. The black squares indicate significant multivariate spatial coordinates. The abscissa is labelled in centimeters (cm) since this is the unit of the data used to construct the distance classes within the practical. In the code below most of the settings are on default including the Holm's correction for multiple testing. The number of classes has been computed using Sturge’s rule [number of classes = 1 + (3.3219 u log 10 n), where n is the number of elements, here the number of pairwise distances]. The resulting number of classes and the corresponding break points can be read in the result object.
+
+```{r Mantel_correlogram, include=TRUE}
+spe_trans <- decostand (spe, "hellinger") # Transform the data
+# The species data are first detrended; 
+spe_detrend <- resid(lm(as.matrix(spe_trans) ~ ., data=spa))
+spe_h.D1 <- dist(spe_detrend)
+(prac.correlog <- mantel.correlog(spe_h.D1, XY=spa, nperm=999))
+summary(prac.correlog)
+
+# Number of classes
+prac.correlog$n.class # or: prac.correlog[2]
+# Break points
+prac.correlog$break.pts # or: prac.correlog[3]
+```
+
+```{r mantel_plot, include=TRUE}
+# Plot the Mantel correlogram
+dev.new(title="Mantel correlogram of the practical data", width=12, height=7)
+plot(prac.correlog)
+```
+
+The result shows significant positive spatial correlation in the first distance classe (i.e. at approximatly 0.02; see the break points) and a rapid negative significant correlation in the second classe. However in class 3 to 5 we see an increasing significant positive spatial correlation(between 100cm to 205cm) Examining the environmental variables allows some speculation about the ecological reasons behind these structures. Close sites tend to show similar communities probably because the conditions are rather similar. On the other hand, any pair of sites that are far apart might express different community structure due to the different conditions present. Class two also shows a significant multivariate spatial correlation, this is presented as the black box on the plot.
+
+Here i attempt to do an RDA analysis using the species_mass dataset. The code below is interpreted the same way as the code above in question 6 (Not discussing or interperting here)
+
+```{r}
+spe_mass <- read_csv("Data/spe_mass.csv")
+spe_mass.hel <- decostand(spe_mass, "hellinger") # Standardise the data
+(spe_mass.rda <- rda(spe_mass.hel ~ ., env))
+summary(spe_mass.hel)	# Scaling 2 (default)
+sum(spe_mass.rda$CCA$eig) # To calculate sum of inertia of CCA and eigenvalues 
+```
+
+Plotting the RDA analysis done above. Here i visualise the species mass data as a function of the environment.s
+
+```{r}
+coef(spe_mass.rda) # here we obtain the cranonical coefficients
+
+# Scaling 1: distance triplot
+dev.new(title="RDA scaling 1 + wa") 
+par(mfrow = c(2, 2))
+plot(spe_mass.rda, scaling=1, 
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - wa scores")  # wa-weight averages
+spe.sc1 <- scores(spe_mass.rda, choices=1:2, scaling=1, display="sp") #sp -species
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length=0, lty=1, col="red")
+
+# Scaling 2 (default): correlation triplot
+# dev.new(title="RDA scaling 2 + wa")
+plot(spe_mass.rda, main="Triplot RDA spe.hel ~ env2 - scaling 2 - wa scores")
+# Explanitory variables as arrows
+# Arrows for species are missing
+spe.sc2 <- scores(spe_mass.rda, choices=1:2, display="sp") # The scores function the argment choice indicates which axes needs to be selected
+arrows(0, 0, spe.sc2[, 1]*0.92, spe.sc2[, 2]*0.92, length=0, lty=1, col="red")
+
+## Triplots of the rda results (lc scores)
+## Site scores as linear combinations of the environmental variables
+# Scaling 1
+# dev.new(title="RDA scaling 1 + lc")
+plot(spe_mass.rda, scaling=1, display=c("sp", "lc", "cn"),  #cn - explanitory variables
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - lc scores") # lc - linear combinations of explanitory variables
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length=0, lty=1, col="red")
+
+# Scaling 2
+# dev.new(title="RDA scaling 2 + lc")
+plot(spe_mass.rda, display=c("sp", "lc", "cn"), 
+     main="Triplot RDA spe.hel ~ env2 - scaling 2 - lc scores") 
+arrows(0, 0, spe.sc2[,1]*0.92, spe.sc2[,2]*0.92, length=0, lty=1, col="red")
+```
+
+Scaling 2: The angle between the carpet and the cardboard is greater than 90 degrees so they are uncorrelated. 
+
+Permutation tests for the species_mass 
+
+```{r}
+# Global test of the RDA result
+anova(spe_mass.rda, permutations=how(nperm=999)) # p =0.6
+# Not significant as p>0.05
+# Tests of all canonical axes
+anova(spe_mass.rda, by="axis", permutations=how(nperm=999)) # p>0.05
+# Axes are not significant
+anova(spe_mass.rda, by="term", permutations=how(nperm=999)) # p value for each location
+# Variance inflation factors (VIF)
+vif.cca(spe_mass.rda)
+
+# Apply Kaiser-Guttman criterion to residual axes
+spe_mass.rda$CA$eig[spe_mass.rda$CA$eig > mean(spe_mass.rda$CA$eig)]
+```
+
+The first test examines overall model fit relative to a randomized or permuted matrix of data. The second test examines the partial effects of the individual variables included in the model. An overall test of significance showed that canonical between matrices X and Y are highly insignificant (p>0.05) after 999 permutations. The canonical axes explain 40% and 20% of the response table varience respectivley. The canonical axes (RDA1 and RDA2) are all insignificant (p>0.05) and display weak species environment correlation. 
