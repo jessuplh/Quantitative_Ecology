@@ -1,0 +1,309 @@
+---
+title: "BCB743 Quantitative Ecology practical"
+author: "Tauriq Jamalie (3437177)"
+date: "20 August 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Question 1 (2 marks)
+
+##Specify the dimensions of the three data sets.
+
+```{r include=FALSE}
+# Set-up ----------------------------------------------------------
+
+library(vegan)
+library(tidyverse)
+library(ggpubr)
+library(cluster)
+library(FD)
+library(gclus)
+library(ade4)
+
+# Load additionnal functions
+# (files must be in the working directory)
+source("coldiss.R")
+source("panelutils.R")
+
+# Load data ---------------------------------------------------------------
+
+env <- read_csv("env.csv")
+spa <- read_csv("spa.csv")
+spe <- read_csv("spe.csv")
+spe_mass <- read_csv("spe_mass.csv")
+
+```
+
+```{r}
+# Dimensions ----------------------------------------------------------
+
+dim(env)
+dim(spa)
+dim(spe)
+dim(spe_mass)
+
+```
+
+#Question 2 (6 marks)
+
+##i.	Provide a plot on Cartesian (spatial) coordinates of a) the species richness, the b) Shannon-Weaver, and c) the Simpson's Index.
+
+```{r include=FALSE}
+
+dev.new(title="Site Locations")
+plot(spa, asp=1, type="n", main="Site Locations", xlab="x 	coordinate (cm)", ylab="y coordinate (cm)")
+lines(spa, col="light blue")
+text(spa, row.names(spa), cex=0.8, col="red")
+
+
+# a) Species Richness
+
+# Species Richness vs. Position along transect
+
+sit.pres <- apply(spe > 0, 1, sum)
+sort(sit.pres)
+dev.new(title="Species Richness", width=10, height=5)
+par(mfrow=c(1,2))
+plot(sit.pres,type="s", las=1, col="gray",
+	main="Species Richness vs. Position along transect",
+	xlab="Positions of sites along transect", ylab="Species richness")
+text(sit.pres, row.names(spe), cex=0.8, col="red")
+
+```
+
+```{r}
+# Map of Species Richness
+
+plot(spa, asp=1, main="Map of Species Richness", pch=21, col="white",
+	bg="brown", cex=5*sit.pres/max(sit.pres), xlab="x coordinate (cm)",
+	ylab="y coordinate (cm)")
+lines(spa, col="light blue")
+
+```
+
+```{r}
+# b) Shannon-Weaver
+
+H <- as.tibble(diversity(spe, index = "shannon"))
+plot(spa, asp=1, main="Shannon-Weaver Diversity Index", pch=21, col="white",
+	bg="brown", cex=H$value, xlab="x coordinate (cm)",
+	ylab="y coordinate (cm)")
+lines(spa, col="light blue")
+
+```
+
+```{r}
+# c) Simpsons Index
+
+N2 <- as.tibble(diversity(spe, index = "simpson"))
+plot(spa, asp=1, main="Simpson Diversity Index", pch=21, col="white",
+	bg="brown", cex=N2$value, xlab="x coordinate (cm)",
+	ylab="y coordinate (cm)")
+lines(spa, col="light blue")
+
+```
+
+##ii.	Explain each figure using your knowledge of how the 'landscape was created'.
+
+a) From the figure depicting species richness it becomes apparent that the highest species richness is occurs near the center of the landscape. This is as a result of the 'species' being thrown towards the centre of the landscape upon the simulated invasion.  
+
+b) From the figure depicting the Shannon-Weaver index we observe the species richness incorporated with the relative abundances. It becomes apparent that the highest indices are found near the centre. Furthermore, the highest Shannon-Weaver indices are located between 100 and 300 cm along the y-axis of the landscape. 
+
+c) From the figure depicting the Simpson's index it becomes apparent that the species evenness increases as it tends toward the centre of the landscape, also increasing vertically along the x-axis at 50, 100, 150, 200 cm respectively. This is also as a result of the 'species' being thrown towards the centre of the landscape upon the simulated invasion. 
+
+#Question 3 (8 marks)
+
+##i. Calculate an association matrix for the species data. (1)
+
+```{r}
+
+# transpose the species data
+trans_spe <- t(spe)
+
+# bray-curtis (default)
+bray_spe <- vegdist(trans_spe)
+bray_spe
+
+```
+
+##ii.	Produce a plot that is suitable for showing the kinds of information contained in the association matrix. (3)
+
+```{r}
+
+cor(spe)
+
+coldiss(bray_spe, byrank = FALSE, diag = TRUE)
+
+```
+
+##iii.	Briefly describe a few of the more ‘obvious’ positive and negative species associations. If possible, add an ‘ecological’ explanation for why this is so. (4)
+
+In the dissimilarity matrix Magenta squares denote a dissimilarity thats close to 0 (Maximum similarity) and Cyan squares denote a dissimilarity thats close to 1 (minimum similarity).  
+
+#Question 4 (20)
+
+##i.	Undertake a PCA on the species data. Comprehensively explain the various (all) components of the summary() of the PCA object. (20)
+
+```{r}
+spe.pca <- rda(spe, scale = TRUE)
+spe.pca
+
+summary(spe.pca)
+
+```
+
+Inertia describes the “variation” in the data. In Principle Component Analysis, the inertia is either the sum of the variances of the variables or, it is the sum of all correlations of the variables with themselves, which corresponds to the number of variables. Eigenvalues are the measures of the importance (variance) of the axes. They can be expressed as Proportions Explained, or proportions of variation accounted for, by dividing them by the total inertia. The species score depict the coordinates of the arrow heads of the variables. Site scores however denote the coordinates of the sites in an ordination diagram.
+
+##ii.	Provide plots of the PCA. How many axes must be retained, and why? What patterns become visible from the biplot? Explain your findings in detail. (10)
+
+```{r}
+
+par(mfrow = c(1, 2))
+biplot(spe.pca, scaling = 1, main = "PCA - scaling 1 (sites)")
+biplot(spe.pca, main = "PCA - scaling 2 ('species')") 
+
+```
+
+
+Six axis must be retained as the cumulative proportion adds up to 0.76. In the figure on the left sites scaling (scaling 1) was used. These sites are scaled by eigenvalues. In this figure the distances in the multidimensional space are more accurately reflected on the graph plane, this shows the relationships between sites better. Sites that share similar environmental characteristcs plots closer together and the ones that are further appart on the graph are also more dissimilar in their actual multidimensional space. Sites 1,2,3, 6, 7, 8,9,10,13, 14, 15,16, 17, 20, 21,22,23, 24, 26,27 and 28 are clustered in close proximity. Furthermore, sites 4, 5, 11, 12, 18, and 19 are a greater distance from the aforementioned cluster. The sites within the cluster have a  low species composition. Site 5 has the highest values of s_c_half and site 18 has the highest value of s_half_rect and gums. The species scaling plots on the left show how the influential variables are tightly correlated with each other. 
+
+#Question 5 (10)
+
+##i.Undertake an NMDS on the species data, and provide plots of the NMDS. (2)
+
+```{r}
+
+# remove the rows with NAs
+sp.1 <- spe[-16,] 
+rm_sp <- sp.1[-26:-27,]
+
+# run bray-curtis on new dataset with removed sites
+spe.bray <- vegdist(rm_sp, method = "bray", binary = TRUE)
+
+# run nmds on bray data
+spe.nmds1 <- metaMDS(spe.bray)
+
+dev.new(title="NMDS on fish species - Percentage difference")
+plot(spe.nmds1, type = "t", main = paste("NMDS/Percentage difference", round(spe.nmds1$stress, 3)))
+
+par(mfrow = c(1, 2))
+stressplot(spe.nmds1, spe.bray)
+ordiplot(spe.nmds1, type = "t", display = c("sites"),
+         main = "NMDS with site scores")
+abline(v = 0, h = 0, lty = 3)
+
+# dev.new(title="NMDS - Shepard plot", width=12, height=6)
+par(mfrow=c(1,2))
+stressplot(spe.nmds1, main = "Shepard plot")
+gof <- goodness(spe.nmds1)
+plot(spe.nmds1, type = "t", main = "Goodness of fit")
+points(spe.nmds1, display = "sites", cex = gof*300)
+
+
+```
+
+##ii.	What patterns become visible from the ordination plot? Explain your findings in detail. (10)
+
+The relationship is non-linear, as can be seen in the Shepard diagram. The NMDS plot has a high stress, which means that the pairwise dissimilarities are not well represented in the ordination space (there is high scatter around the red line in the Shepard diagram). The graph has a poor linear relationship, with constant stasis periods as it increases. The points on the graph are clustered between 0.2 and 0.8. The Goodness of fit  indicates that sites 7, 8, 10, 22, and 25 are outliers. This means that they are dissimilar to the other sites. Overlapping sites have a high similarity.
+
+#Question 6 (40)
+
+##i.Do a constrained analysis on the data, and comprehensively explain all the findings as per the of the summary() of the NMDS object. (20)
+
+```{r}
+
+spe.hel <- as.tibble(decostand(spe, "hellinger"))
+spe.hel
+
+spe.rda <- rda(spe.hel ~ ., env)
+spe.rda
+
+summary(spe.rda) 
+
+```
+
+The partitioning of variance depicts the overall variance which is  then divided into constrainedand unconstrained values. Constrained depicts 7.267% of the overall variance and unconstrained depicts 92.733% of the overall variance respectively. Furthermore, two canonical axes with eigenvalues labelled RDA1 and RDA2 and 16 additional respectively is produced. It also produces unconstrained axis for residuals- specifically PC1 to PC16. The summary() function produces eigenvalues depicting cumulative proportion of variance explained or represented. The last cumulative value is one. The cumulative contribution to the variance obtained is the proportion of the total variance of the response data explained by the RDA. It's the same value as the proportion constrained which is 0.07267. It becomes apparent that values are decreasing from RDA1 to RDA2. Furthermore, it becomes apparent that the first residual eigenvalue is larger than the last canonical eigenvalue. The canonical (RDAx) eigenvalues indicate the amount of variance explained by the RDA model, unlike the residual eigenvalues which measure amounts of variance represented by the residual axes, this is not explained by the RDA model. The accumulated constrained eigenvectors depict the cumulative amounts of variance. This is expressed as proportions of the total explained variance. Species have been scaled proportional to eigenvalies with weighted dispersal equal in all direction. There is as general scaling constant of 2.089857. In RDA1, b_half had the highest score (0.265460), and beans had the lowest score (-0.148416). In RDA2, b_square had the highest score (0.1565875), and s_half had the lowest score (-0.1229982). In PC1, PC2, PC3, and PC4 the highest scores were b_c_triangle (0.2849), b_c_traingle (0.1705), b_c_triangle (0.3005) and pink_el (0.2067) respectively and the lowest scores were beans (-0.7991), s_rect (-0.7495), b_square (-0.3088) and s_triangle (-0.3015) respectively. The biplot scores for RDA increased from -0.9987 to -0.05939 for carpet. Furthermore, the scores of PC1 to PC4 all equal 0. For cardboard the score RDA scores decreased from 0.7354 to -0.67760. The scores for PC1 to PC4  also equalled 0 for cardboard.
+
+##ii.	Run the necessary permutation tests. Explain the outcomes. (6)
+
+```{r}
+
+# permutations
+
+# Global test of the RDA result
+anova(spe.rda, permutations = how(nperm = 999))
+# Tests of all canonical axes
+anova(spe.rda, by = "axis", permutations = how(nperm = 999))
+
+anova(spe.rda, by = "term", permutations = how(nperm = 999))
+# Variance inflation factors (VIF)
+vif.cca(spe.rda)
+
+# Apply Kaiser-Guttman criterion to residual axes
+spe.rda$CA$eig[spe.rda$CA$eig > mean(spe.rda$CA$eig)]
+
+```
+
+For the global permutation test the Pr = 0.636. This indicates that the model is not significant. By testting all canonical axis it becomes apparnet that the Pr for RDA1 and RDA2 have values of 0.178 and 0.940 respectively. In this case both canonical axes are non-significant. Both the carpet and cardboard have Pr scores of 0.069 and 0.966 respectively. These values arelower than 0.05. This  means that they are both non-significant. The variance inflation factors measures the proportion the variance of a regression coefficient is inflated around other explanatory variables. Thus the carpet has a VIF score of 1.928571 as opposed to the cupboard that has a VIF score of 1.928571.  The Kaiser-Guttman criterion computes the mean of all eigenvalues and interpres the axes with eigenvalues that are  larger than the mean (PC1 to PC7). Where PC1 = 0.14898504, PC2 = 0.11246212, PC3 = 0.07949840, PC4 = 0.06204632, PC5 = 0.05426915, PC6 = 0.05094135 and PC7 = 0.0429224 respectively. 
+
+##iii.	Produce the necessary biplots. Explain the findings. (14)
+
+```{r}
+
+# Canonical coefficients from the rda object
+coef(spe.rda)
+
+# Unadjusted R^2 retrieved from the rda object
+R2 <- RsquareAdj(spe.rda)$r.squared
+R2
+
+# Adjusted R^2 retrieved from the rda object
+R2adj <- RsquareAdj(spe.rda)$adj.r.squared
+R2adj
+
+# Triplots of the rda results (wa scores)
+dev.new(title = "RDA scaling 1 + wa")
+par(mfrow = c(2, 2))
+plot(spe.rda, scaling = 1, 
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - wa scores")
+spe.sc1 <- scores(spe.rda, choices = 1:2, scaling = 1, display = "sp")
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length = 0, lty = 1, col = "red")
+
+# Scaling 2 (default): correlation triplot
+# dev.new(title = "RDA scaling 2 + wa")
+plot(spe.rda, main = "Triplot RDA spe.hel ~ env2 - scaling 2 - wa scores")
+spe.sc2 <- scores(spe.rda, choices = 1:2, display = "sp")
+arrows(0, 0, spe.sc2[, 1]*0.92, spe.sc2[, 2]*0.92, length = 0, lty = 1, col = "red")
+
+# Triplots of the rda results (lc scores)
+# dev.new(title = "RDA scaling 1 + lc")
+# par(mfrow = c(1, 2))
+plot(spe.rda, scaling = 1, display = c("sp", "lc", "cn"), 
+     main="Triplot RDA spe.hel ~ env2 - scaling 1 - lc scores")
+arrows(0, 0, spe.sc1[, 1]*0.92, spe.sc1[, 2]*0.92, length = 0, lty = 1, col = "red")
+
+# Scaling 2
+# dev.new(title = "RDA scaling 2 + lc")
+plot(spe.rda, display = c("sp", "lc", "cn"), 
+     main="Triplot RDA spe.hel ~ env2 - scaling 2 - lc scores")
+arrows(0, 0, spe.sc2[,1]*0.92, spe.sc2[,2]*0.92, length = 0, lty = 1, col = "red") 
+
+
+```
+
+On the  figure on the top left the angles between the sites and the species in the biplot reflect the correlation. All sites are clustered around the centroid. There are outliers that lie within the top right of the plot. rows 17 and 23 are seen alongside b_square and s_rect. In the bottom right section, row 14 and 18 can be seen alongside the gums, c_half and pink_half species respectively. This means that these species are more related than the rest of the others. Also in the bottom right lies cardboard- this is the dispersal vector. Sites and species and therefore more closely related to this variable. Bulk of species are found in the bottom left section, thus strongly relating to the carpet variable. The figure on the top right depicts scaling 2. Sites are more spread out and species are centred around the centroid. In the top right section, rows 22, 23, 25 and 27 are visible depicting that these sites are positively correlated. Species b_square and s_rect can be seen in the top_right section indicating that they are positively correlated.  Short arrows indicate that they are less important for this plot. In the bottom right section, rows 5, 6, 14 and 18 are all visible but are spread out. These variables are  positively correlated with one another  as well as the dispersal vector- cardboard. In the bottom left section, site 7, 11, 26, 27 and 28 are visible. 26 is an outliers. These sites are positively correlated with the  carpet variable, these are spread further than the rows in  the bottom right section where cardboard lies. In the top left section, rows 3, 4, 10 and 15 are positively correlated but with this lacks the species. Row 2 is very close to the centroid. Rows 20 and 24 is located on the negative y axis and site 13 is located on the positive y axis. Triplot RDA spe.hel ~ env2 - lc scores triplots indicate that the sites are clustered close to the centroid. Lc scores indicate that they are closely related. In the first lc triplot row 17 plays is correlated with the locations of b_square and s_rect on the plot. In row 18 gums and s_half are found in the bottom right section of the plot where cardboard is the main infuencing factor. In the bottom left section of the plot carpet is the main factor influencing the rest of the species. From scaling 2 of this triplot, rows 17 and rows 18 have a decreased arrow length thus have less influence on the species.
+
+#Question 7 (10)
+
+##Write down your understanding of the 'ecology' of the landscape that was sampled and analysed in the various steps, above.
+
+
+The study site spanned an area of 200cmx360cm. This area comprised of carpet, cardboard and wood. Species immigration occured at different angles towards the center. Wind was the main dispersal vector. Thus pecies richness and relative abundance increases toward the  centre of the landscape. Samples were taken with the use of 50cmx50cm transects. 7 sections were sampled across the y-coordinate and 4 sections were sampled across the x-axis. Species lying in the transect was tallied and data was collated on excel. Comma delimited csv's were then generated for the data collected. The species richness, Shannon-Weaver and Simpson's indices, indicated that the centre of the study site had the highest species richness, and relative abundance and evenness in the landscape. The association matrix for the species data indicated that the 'gums' species was 
+the most dissimilar to the other species. A PCA analysis  revealed that PC1 to PC6 should be retained 
+as it shows more than 75% of the total variation. The biplots from the PCA analysis indicate that species are located more to the right of the biplot with wind as a vector. Thus wind generated with cardboard is the main factor infuencing species.
